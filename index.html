@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <title>Our Route 66 Trip — Patron Suggestions</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body { margin: 0; font-family: Arial, sans-serif; background: #f4f4f4; }
+        #header {
+            background: linear-gradient(to right, #c8102e, #f4a261);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            font-size: 1.8em;
+        }
+        #progress-container {
+            background: white;
+            padding: 15px;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        #progress-text {
+            font-size: 1.4em;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+        #map { height: 68vh; width: 100%; }
+        #controls {
+            padding: 12px;
+            background: white;
+            text-align: center;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            background: #c8102e;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover { background: #a00; }
+        .legend {
+            position: absolute;
+            bottom: 25px;
+            right: 25px;
+            background: white;
+            padding: 12px;
+            border-radius: 8px;
+            box-shadow: 0 3px 8px rgba(0,0,0,0.25);
+            z-index: 1000;
+            font-size: 0.95em;
+        }
+        .admin-btn { background: #333; font-size: 0.9em; }
+        .popup-content { min-width: 280px; line-height: 1.5; }
+        .action-btn { 
+            background: #c8102e; 
+            color: white; 
+            padding: 6px 12px; 
+            margin: 4px 2px; 
+            font-size: 0.9em; 
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .delete-btn { background: #a00; }
+    </style>
+</head>
+<body>
+    <div id="header">🚗 Our Route 66 Adventure — 2026 Centennial Year</div>
+    
+    <div id="progress-container">
+        <div id="progress-text">0% Complete — Chicago to Santa Monica</div>
+        <small>Patrons: Click anywhere on the map to add a suggestion pin with title + comment</small>
+    </div>
+
+    <div id="controls">
+        <button onclick="toggleAdmin()" class="admin-btn">🔑 Admin Mode (Progress Only)</button>
+        <button onclick="shareMap()">Share Map</button>
+    </div>
+
+    <div id="map"></div>
+
+    <div class="legend">
+        <strong>Legend</strong><br>
+        🟢 Patron Pins (title, comment, edit, delete)<br>
+        🟠 Famous Stops (view only)<br>
+        ⭐ Summer 2026 Events (view only)<br>
+        <span style="color:#c8102e; font-weight:bold;">━━━</span> Your Progress Line
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        const map = L.map('map').setView([38.5, -95], 5);
+        
+        // Stadia Maps - Alidade Smooth (clean road map style)
+        L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://stadiamaps.com/" target="_blank">Stadia Maps</a> &copy; <a href="https://openmaptiles.org/" target="_blank">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors',
+            maxZoom: 20,
+            minZoom: 3
+        }).addTo(map);
+
+        const fullRouteCoords = [
+            [41.8781, -87.6298], [39.7817, -89.6501], [38.6270, -90.1994],
+            [37.2089, -93.2923], [36.1539, -95.9928], [35.4676, -97.5164],
+            [35.2220, -101.8313], [35.0844, -106.6504], [35.1983, -111.6513],
+            [34.5400, -112.4685], [34.0489, -111.0937], [34.0522, -118.2437]
+        ];
+
+        let progressLine = null;
+        let currentProgress = 35;
+        let patronMarkers = [];
+
+        // Famous Stops (view-only)
+        const famousStops = [
+            {lat: 41.8781, lng: -87.6298, title: "Chicago Start", desc: "Official beginning at Grant Park / Adams & Michigan Ave"},
+            {lat: 38.6270, lng: -90.1994, title: "Gateway Arch", desc: "St. Louis, MO — Iconic symbol of the Westward Expansion"},
+            {lat: 37.2089, lng: -93.2923, title: "Springfield, MO", desc: "Birthplace of Route 66"},
+            {lat: 36.1947, lng: -95.7475, title: "Blue Whale of Catoosa", desc: "Oklahoma — Classic roadside attraction"},
+            {lat: 35.2220, lng: -101.8313, title: "Cadillac Ranch", desc: "Amarillo, TX — Iconic art installation"},
+            {lat: 35.0844, lng: -106.6504, title: "Albuquerque, NM", desc: "Historic Old Town and neon signs"},
+            {lat: 35.1983, lng: -111.6513, title: "Flagstaff, AZ", desc: "Gateway to the Grand Canyon area"},
+            {lat: 34.5400, lng: -112.4685, title: "Seligman, AZ", desc: "Classic Route 66 town — Fun Run starting point"},
+            {lat: 34.0522, lng: -118.2437, title: "Santa Monica Pier", desc: "Official end of Route 66"}
+        ];
+
+        // Summer 2026 Centennial Events
+        const summerEvents = [
+            {lat: 37.2089, lng: -93.2923, date: "April 30–May 3, 2026", title: "National Route 66 Centennial Kickoff", desc: "Springfield, MO — Concerts, car shows, parades, and major celebrations"},
+            {lat: 37.2089, lng: -93.2923, date: "June 4–6, 2026", title: "Rolla Route 66 Summerfest", desc: "Rolla, MO — Parade, music, family activities for the centennial"},
+            {lat: 38.6270, lng: -90.1994, date: "May 1–4, 2026", title: "Route 66 Centennial Festival", desc: "St. Louis, MO — Music, classic cars, exhibits"},
+            {lat: 38.8114, lng: -89.9253, date: "June 13, 2026", title: "Edwardsville Route 66 Festival", desc: "Edwardsville, IL — Music, vintage cars, food in downtown"},
+            {lat: 36.1539, lng: -95.9928, date: "June 27–28, 2026", title: "AAA Route 66 Road Fest", desc: "Tulsa, OK — Major centennial event with cars, exhibits, live music"},
+            {lat: 35.2220, lng: -101.8313, date: "June 4–13, 2026", title: "Texas Route 66 Festival", desc: "Amarillo area, TX — 10 days of car shows, parades, tours"},
+            {lat: 34.0522, lng: -118.2437, date: "May 1–9, 2026", title: "Santa Monica International Jazz Festival", desc: "Santa Monica Pier — Tribute to Route 66 Centennial"}
+        ];
+
+        function updateProgressLine() {
+            if (progressLine) map.removeLayer(progressLine);
+            const total = fullRouteCoords.length;
+            const progPoints = Math.max(2, Math.ceil(total * (currentProgress / 100)));
+            progressLine = L.polyline(fullRouteCoords.slice(0, progPoints), {
+                color: '#c8102e',
+                weight: 12,
+                opacity: 0.95,
+                lineJoin: 'round'
+            }).addTo(map);
+
+            document.getElementById('progress-text').textContent = `${currentProgress}% Complete — Chicago to Santa Monica`;
+        }
+
+        function createPatronPopup(data) {
+            return `
+                <div class="popup-content">
+                    <strong>${data.title}</strong><br><br>
+                    <strong>Comment:</strong><br>
+                    ${data.comment || 'No comment yet.'}<br><br>
+                    <small>Added: ${new Date().toLocaleDateString()}</small><br><br>
+                    <button class="action-btn" onclick="editPatronComment(${data.lat}, ${data.lng})">Edit Comment</button>
+                    <button class="action-btn delete-btn" onclick="deletePatronPin(${data.lat}, ${data.lng})">Delete This Pin</button>
+                </div>
+            `;
+        }
+
+        window.editPatronComment = function(lat, lng) {
+            const markerData = patronMarkers.find(m => Math.abs(m.lat - lat) < 0.0001 && Math.abs(m.lng - lng) < 0.0001);
+            if (!markerData) return;
+            const newComment = prompt("Edit comment for this pin:", markerData.comment || "");
+            if (newComment !== null) {
+                markerData.comment = newComment.trim();
+                savePatronPins();
+                markerData.marker.setPopupContent(createPatronPopup(markerData));
+                markerData.marker.openPopup();
+            }
+        };
+
+        window.deletePatronPin = function(lat, lng) {
+            if (confirm("Delete this patron pin permanently?")) {
+                patronMarkers = patronMarkers.filter(m => {
+                    if (Math.abs(m.lat - lat) < 0.0001 && Math.abs(m.lng - lng) < 0.0001) {
+                        map.removeLayer(m.marker);
+                        return false;
+                    }
+                    return true;
+                });
+                savePatronPins();
+            }
+        };
+
+        function addPatronPin(lat, lng) {
+            const title = prompt("Pin Title (e.g., 'Must-visit diner suggestion')") || "Patron Suggestion";
+            const comment = prompt("Your suggestion or comment:") || "";
+            
+            const marker = L.marker([lat, lng], {
+                icon: L.divIcon({html: '🟢', iconSize: [28, 28]})
+            }).addTo(map);
+
+            const popupHTML = createPatronPopup({title, comment, lat, lng});
+            marker.bindPopup(popupHTML);
+
+            patronMarkers.push({ marker, lat, lng, title, comment });
+            savePatronPins();
+            marker.openPopup();
+        }
+
+        function savePatronPins() {
+            const data = patronMarkers.map(m => ({
+                lat: m.lat,
+                lng: m.lng,
+                title: m.title,
+                comment: m.comment || ""
+            }));
+            localStorage.setItem('route66PatronPins', JSON.stringify(data));
+        }
+
+        function loadPatronPins() {
+            const saved = localStorage.getItem('route66PatronPins');
+            if (saved) {
+                JSON.parse(saved).forEach(p => {
+                    const marker = L.marker([p.lat, p.lng], {
+                        icon: L.divIcon({html: '🟢', iconSize: [28, 28]})
+                    }).addTo(map);
+
+                    const popupHTML = createPatronPopup(p);
+                    marker.bindPopup(popupHTML);
+
+                    patronMarkers.push({ marker, lat: p.lat, lng: p.lng, title: p.title, comment: p.comment || "" });
+                });
+            }
+        }
+
+        function shareMap() {
+            navigator.clipboard.writeText(window.location.href).then(() => {
+                alert("✅ Map link copied! Share with patrons.");
+            });
+        }
+
+        function toggleAdmin() {
+            const pass = prompt("Enter admin password:");
+            if (pass === "route66owner2026") {  // ← CHANGE THIS TO YOUR OWN SECURE PASSWORD
+                const newProg = prompt("Update progress % (0-100):", currentProgress);
+                if (newProg !== null) {
+                    currentProgress = Math.max(0, Math.min(100, parseFloat(newProg) || 0));
+                    localStorage.setItem('route66Progress', currentProgress);
+                    updateProgressLine();
+                    alert(`Progress updated to ${currentProgress}%`);
+                }
+            } else if (pass) {
+                alert("Incorrect password.");
+            }
+        }
+
+        // Load famous stops
+        famousStops.forEach(stop => {
+            L.marker([stop.lat, stop.lng], {icon: L.divIcon({html: '🟠', iconSize: [32,32]})})
+                .addTo(map)
+                .bindPopup(`<div class="popup-content"><strong>${stop.title}</strong><br><br>${stop.desc}</div>`);
+        });
+
+        // Load summer events
+        summerEvents.forEach(ev => {
+            L.marker([ev.lat, ev.lng], {icon: L.divIcon({html: '⭐', iconSize: [32,32]})})
+                .addTo(map)
+                .bindPopup(`<div class="popup-content"><strong>${ev.title}</strong><br><small>${ev.date}</small><br><br>${ev.desc}</div>`);
+        });
+
+        // Click map to add patron pin
+        map.on('click', (e) => {
+            addPatronPin(e.latlng.lat, e.latlng.lng);
+        });
+
+        // Initialize
+        const savedProgress = localStorage.getItem('route66Progress');
+        if (savedProgress) currentProgress = parseFloat(savedProgress);
+        updateProgressLine();
+        loadPatronPins();
+
+        console.log("%cRoute 66 map updated with Stadia Maps tiles — should fix access blocked errors.", "color:#c8102e;font-size:14px;");
+    </script>
+</body>
+</html>
