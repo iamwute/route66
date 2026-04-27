@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Our Route 66 Trip — Shared Patron Suggestions</title>
+    <title>Route 66 Centennial Map — 2026 Official Patron Map</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
@@ -11,102 +11,122 @@
         #header { background: linear-gradient(to right, #c8102e, #f4a261); color: white; padding: 20px; text-align: center; font-size: 1.8em; }
         #progress-container { background: white; padding: 15px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
         #progress-text { font-size: 1.4em; font-weight: bold; margin-bottom: 8px; }
-        #map { height: 68vh; width: 100%; min-height: 400px; } /* Added min-height for safety */
+        #map { height: 68vh; width: 100%; min-height: 450px; }
         #controls { padding: 12px; background: white; text-align: center; }
         button { padding: 10px 20px; margin: 5px; background: #c8102e; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
         button:hover { background: #a00; }
-        .legend { position: absolute; bottom: 25px; right: 25px; background: white; padding: 12px; border-radius: 8px; box-shadow: 0 3px 8px rgba(0,0,0,0.25); z-index: 1000; font-size: 0.95em; pointer-events: none; }
+        .legend { position: absolute; bottom: 25px; right: 25px; background: white; padding: 12px; border-radius: 8px; box-shadow: 0 3px 8px rgba(0,0,0,0.25); z-index: 1000; font-size: 0.9em; pointer-events: none; }
+        .popup-content { min-width: 260px; line-height: 1.4; }
+        .del-btn { background: #333; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; margin-top: 10px; width: 100%; }
         .admin-btn { background: #333; font-size: 0.9em; }
-        .popup-content { min-width: 250px; line-height: 1.5; }
     </style>
 </head>
 <body>
-    <div id="header">🚗 Our Route 66 Adventure — Shared Patron Map (2026 Centennial)</div>
+    <div id="header">🚗 Route 66 Centennial — Shared Patron Map (Summer 2026)</div>
     
     <div id="progress-container">
         <div id="progress-text">0% Complete — Chicago to Santa Monica</div>
-        <small>Click the map to add a public suggestion pin • Everyone sees the same pins</small>
+        <small>Click map to add a pin • Explore Summer 2026 Festivals & Landmarks</small>
     </div>
 
     <div id="controls">
         <button onclick="toggleAdmin()" class="admin-btn">🔑 Admin Mode</button>
-        <button onclick="shareMap()">Share Map</button>
+        <button onclick="shareMap()">Copy Map Link</button>
     </div>
 
     <div id="map"></div>
 
     <div class="legend">
-        <strong>Legend</strong><br>
-        🟢 Shared Patron Pins<br>
-        🟠 Famous Stops<br>
-        ⭐ Summer 2026 Events<br>
-        <span style="color:#c8102e; font-weight:bold;">━━━</span> Current Progress
+        <strong>Map Legend</strong><br>
+        🟢 Patron Suggestions<br>
+        🌲 National Parks<br>
+        🟠 Historic Landmarks<br>
+        ⭐ Summer 2026 Festivals<br>
+        <span style="color:#c8102e; font-weight:bold;">━━━</span> Current Journey
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        // === SUPABASE FIXED INITIALIZATION ===
+        // === SUPABASE CONFIG ===
         const SUPABASE_URL = 'https://duggytpkrcqvebdwrphr.supabase.co';
         const SUPABASE_ANON_KEY = 'sb_publishable_qRT_1b4lB4-sfrdUi2YtDw_zuJ2UC8y';
-        
-        // Use lowercase 'supabase' to access the library global from CDN
+        const ADMIN_PASS = "route66owner2026";
         const sbClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-        const map = L.map('map').setView([38.5, -95], 5);
-
+        const map = L.map('map').setView([37.5, -100], 5);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; OpenStreetMap contributors',
-            maxZoom: 19
+            attribution: '&copy; OpenStreetMap contributors'
         }).addTo(map);
 
+        // --- DATA: ROUTE, LANDMARKS & SUMMER EVENTS ---
         const fullRouteCoords = [
-            [41.8781, -87.6298], [39.7817, -89.6501], [38.6270, -90.1994],
-            [37.2089, -93.2923], [36.1539, -95.9928], [35.4676, -97.5164],
-            [35.2220, -101.8313], [35.0844, -106.6504], [35.1983, -111.6513],
-            [34.5400, -112.4685], [34.0489, -111.0937], [34.0522, -118.2437]
+            [41.8781, -87.6298], [40.4842, -88.9937], [39.7817, -89.6501], [38.6270, -90.1994],
+            [37.2089, -93.2923], [37.0753, -94.6335], [36.1539, -95.9928], [35.4676, -97.5164],
+            [35.2220, -101.8313], [35.0392, -102.6635], [35.0844, -106.6504], [35.1983, -111.6513],
+            [35.1894, -114.0530], [34.8481, -114.6141], [34.0195, -118.4912]
+        ];
+
+        const markers = [
+            {lat: 41.8781, lng: -87.6298, type:'landmark', title: "Begin Route 66", desc: "Chicago, IL - Official Start."},
+            {lat: 38.6247, lng: -90.1847, type:'park', title: "Gateway Arch NP", desc: "St. Louis, MO - Gateway to the West."},
+            {lat: 37.2089, lng: -93.2923, type:'landmark', title: "Birthplace of 66", desc: "Springfield, MO - Site of the 1926 naming."},
+            {lat: 35.0392, lng: -102.6635, type:'landmark', title: "Midpoint Café", desc: "Adrian, TX - 1,139 miles to each end."},
+            {lat: 34.9099, lng: -109.8067, type:'park', title: "Petrified Forest NP", desc: "Arizona - Only NP the road cuts through."},
+            {lat: 34.0086, lng: -118.4986, type:'landmark', title: "End of Trail Pier", desc: "Santa Monica, CA - The finish line."},
+            // Summer 2026 Festivals
+            {lat: 39.7817, lng: -89.6501, type:'event', title: "IL State Fair 66 Experience", desc: "Aug 13-23, 2026: Massive neon & history expo."},
+            {lat: 38.8114, lng: -89.9253, type:'event', title: "Edwardsville 66 Fest", desc: "June 13, 2026: Classic car show & music."},
+            {lat: 38.6011, lng: -90.3547, type:'event', title: "Cars & Guitars Fest", desc: "June 7, 2026: Kirkwood, MO celebration."},
+            {lat: 37.9509, lng: -91.7724, type:'event', title: "Route 66 Summerfest", desc: "June 4-6, 2026: Rolla, MO kickoff event."},
+            {lat: 36.1539, lng: -95.9928, type:'event', title: "AAA Route 66 Road Fest", desc: "June 27-28, 2026: Major Tulsa festival."},
+            {lat: 35.4676, lng: -97.5164, type:'event', title: "Kickin' It on 66 Birthday", desc: "May 30, 2026: OKC Scissortail Park party."},
+            {lat: 35.2220, lng: -101.8313, type:'event', title: "Texas Route 66 Festival", desc: "June 4-13, 2026: Cattle drives & Grand Finale."},
+            {lat: 35.0844, lng: -106.6504, type:'event', title: "ABQ Route 66 Summerfest", desc: "July 18, 2026: 1 mile of music & food in Nob Hill."},
+            {lat: 35.5281, lng: -108.7426, type:'event', title: "Gallup Route 66 Rides", desc: "July 24-26, 2026: Tunnel of fire & 66 hot air balloons."},
+            {lat: 37.2089, lng: -93.2923, type:'event', title: "Birthplace of 66 Festival", desc: "Aug 7-8, 2026: Springfield's premier car show."}
         ];
 
         let progressLine = null;
-        let currentProgress = 100;
+        let currentProgress = 35;
         let patronMarkers = [];
 
-        const famousStops = [
-            {lat: 41.8781, lng: -87.6298, title: "Chicago Start", desc: "Official beginning at Grant Park"},
-            {lat: 38.6270, lng: -90.1994, title: "Gateway Arch", desc: "St. Louis, MO — Iconic symbol"},
-            {lat: 37.2089, lng: -93.2923, title: "Springfield, MO", desc: "Birthplace of Route 66"},
-            {lat: 36.1947, lng: -95.7475, title: "Blue Whale of Catoosa", desc: "Oklahoma Roadside Classic"},
-            {lat: 35.2220, lng: -101.8313, title: "Cadillac Ranch", desc: "Amarillo, TX Art"},
-            {lat: 34.0522, lng: -118.2437, title: "Santa Monica Pier", desc: "Official end of the Mother Road"}
-        ];
+        // --- LOGIC ---
+        function getIcon(type) {
+            let emoji = '⚪';
+            if (type === 'park') emoji = '🌲';
+            if (type === 'landmark') emoji = '🟠';
+            if (type === 'event') emoji = '⭐';
+            return L.divIcon({className:'custom-icon', html: emoji, iconSize: [30,30]});
+        }
 
-        const summerEvents = [
-            {lat: 37.2089, lng: -93.2923, date: "April 30–May 3, 2026", title: "National Centennial Kickoff", desc: "Springfield, MO — Music and Parades"},
-            {lat: 36.1539, lng: -95.9928, date: "June 27–28, 2026", title: "AAA Route 66 Road Fest", desc: "Tulsa, OK Major Event"}
-        ];
+        markers.forEach(m => {
+            L.marker([m.lat, m.lng], {icon: getIcon(m.type)}).addTo(map)
+              .bindPopup(`<strong>${m.title}</strong><br>${m.desc}`);
+        });
 
         async function loadSharedPins() {
             const { data, error } = await sbClient.from('route66_pins').select('*').order('created_at', { ascending: false });
-            if (error) { console.error("Supabase Error:", error); return; }
-
+            if (error) return;
             patronMarkers.forEach(m => map.removeLayer(m.marker));
             patronMarkers = [];
-
             data.forEach(pin => {
-                const popup = `<div class="popup-content"><strong>${pin.title}</strong><br>${pin.comment || ''}<br><br><small>Added: ${new Date(pin.created_at).toLocaleDateString()}</small></div>`;
-                const marker = L.marker([pin.lat, pin.lng], {icon: L.divIcon({className: 'custom-div-icon', html: '🟢', iconSize: [25,25]})}).addTo(map).bindPopup(popup);
+                const popup = `<div class="popup-content"><strong>${pin.title}</strong><br>${pin.comment}<br><br><small>Added: ${new Date(pin.created_at).toLocaleDateString()}</small><button class="del-btn" onclick="deletePin('${pin.id}')">🗑️ Delete</button></div>`;
+                const marker = L.marker([pin.lat, pin.lng], {icon: L.divIcon({html: '🟢', iconSize: [25,25]})}).addTo(map).bindPopup(popup);
                 patronMarkers.push({marker});
             });
         }
 
         async function addPatronPin(lat, lng) {
-            const title = prompt("Place Name (e.g. 'Cozy Diner')");
+            const title = prompt("Pin Name?");
             if (!title) return;
-            const comment = prompt("Why should we stop here?");
+            const comment = prompt("Why this spot?");
+            await sbClient.from('route66_pins').insert([{ lat, lng, title, comment }]);
+            loadSharedPins();
+        }
 
-            const { error } = await sbClient.from('route66_pins').insert([{ lat, lng, title, comment }]);
-            if (error) {
-                alert("Error: Check your Supabase RLS policies!");
-            } else {
+        async function deletePin(id) {
+            if (prompt("Admin Password:") === ADMIN_PASS) {
+                await sbClient.from('route66_pins').delete().eq('id', id);
                 loadSharedPins();
             }
         }
@@ -115,48 +135,22 @@
             if (progressLine) map.removeLayer(progressLine);
             const total = fullRouteCoords.length;
             const progPoints = Math.max(2, Math.ceil(total * (currentProgress / 100)));
-            progressLine = L.polyline(fullRouteCoords.slice(0, progPoints), {
-                color: '#c8102e', weight: 8, opacity: 0.8
-            }).addTo(map);
+            progressLine = L.polyline(fullRouteCoords.slice(0, progPoints), {color: '#c8102e', weight: 8, opacity: 0.8}).addTo(map);
             document.getElementById('progress-text').textContent = `${currentProgress}% Complete — Chicago to Santa Monica`;
         }
 
         function toggleAdmin() {
-            const pass = prompt("Admin Password:");
-            if (pass === "route66owner2026") {
-                const newProg = prompt("Update progress (0-100):", currentProgress);
-                if (newProg !== null) {
-                    currentProgress = Math.max(0, Math.min(100, parseFloat(newProg) || 0));
-                    localStorage.setItem('route66Progress', currentProgress);
-                    updateProgressLine();
-                }
+            if (prompt("Admin Password:") === ADMIN_PASS) {
+                const newP = prompt("New Progress %?", currentProgress);
+                if (newP !== null) { currentProgress = parseFloat(newP); updateProgressLine(); }
             }
         }
 
-        function shareMap() {
-            navigator.clipboard.writeText(window.location.href).then(() => alert("Link copied!"));
-        }
-
-        // Render fixed items
-        famousStops.forEach(s => {
-            L.marker([s.lat, s.lng], {icon: L.divIcon({className: 'stop-icon', html:'🟠', iconSize:[30,30]})}).addTo(map)
-              .bindPopup(`<strong>${s.title}</strong><br>${s.desc}`);
-        });
-
-        summerEvents.forEach(e => {
-            L.marker([e.lat, e.lng], {icon: L.divIcon({className: 'event-icon', html:'⭐', iconSize:[30,30]})}).addTo(map)
-              .bindPopup(`<strong>${e.title}</strong><br>${e.date}<br>${e.desc}`);
-        });
+        function shareMap() { navigator.clipboard.writeText(window.location.href).then(() => alert("Copied!")); }
 
         map.on('click', e => addPatronPin(e.latlng.lat, e.latlng.lng));
-
-        // Initial setup
-        const saved = localStorage.getItem('route66Progress');
-        if (saved) currentProgress = parseFloat(saved);
         updateProgressLine();
         loadSharedPins();
-
-        // Fix for rendering bugs on mobile/Netlify
         setTimeout(() => map.invalidateSize(), 500);
     </script>
 </body>
