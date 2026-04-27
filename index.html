@@ -3,8 +3,6 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="referrer" content="strict-origin-when-cross-origin">
-    <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
     <title>Our Route 66 Trip — Shared Patron Suggestions</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -13,13 +11,13 @@
         #header { background: linear-gradient(to right, #c8102e, #f4a261); color: white; padding: 20px; text-align: center; font-size: 1.8em; }
         #progress-container { background: white; padding: 15px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
         #progress-text { font-size: 1.4em; font-weight: bold; margin-bottom: 8px; }
-        #map { height: 68vh; width: 100%; }
+        #map { height: 68vh; width: 100%; min-height: 400px; } /* Added min-height for safety */
         #controls { padding: 12px; background: white; text-align: center; }
         button { padding: 10px 20px; margin: 5px; background: #c8102e; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
         button:hover { background: #a00; }
-        .legend { position: absolute; bottom: 25px; right: 25px; background: white; padding: 12px; border-radius: 8px; box-shadow: 0 3px 8px rgba(0,0,0,0.25); z-index: 1000; font-size: 0.95em; }
+        .legend { position: absolute; bottom: 25px; right: 25px; background: white; padding: 12px; border-radius: 8px; box-shadow: 0 3px 8px rgba(0,0,0,0.25); z-index: 1000; font-size: 0.95em; pointer-events: none; }
         .admin-btn { background: #333; font-size: 0.9em; }
-        .popup-content { min-width: 280px; line-height: 1.5; }
+        .popup-content { min-width: 250px; line-height: 1.5; }
     </style>
 </head>
 <body>
@@ -31,7 +29,7 @@
     </div>
 
     <div id="controls">
-        <button onclick="toggleAdmin()" class="admin-btn">🔑 Admin Mode (Progress Only)</button>
+        <button onclick="toggleAdmin()" class="admin-btn">🔑 Admin Mode</button>
         <button onclick="shareMap()">Share Map</button>
     </div>
 
@@ -40,23 +38,24 @@
     <div class="legend">
         <strong>Legend</strong><br>
         🟢 Shared Patron Pins<br>
-        🟠 Famous Stops (view only)<br>
-        ⭐ Summer 2026 Events (view only)<br>
-        <span style="color:#c8102e; font-weight:bold;">━━━</span> Progress Line
+        🟠 Famous Stops<br>
+        ⭐ Summer 2026 Events<br>
+        <span style="color:#c8102e; font-weight:bold;">━━━</span> Current Progress
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        // === FIXED SUPABASE CONFIG ===
+        // === SUPABASE FIXED INITIALIZATION ===
         const SUPABASE_URL = 'https://duggytpkrcqvebdwrphr.supabase.co';
         const SUPABASE_ANON_KEY = 'sb_publishable_qRT_1b4lB4-sfrdUi2YtDw_zuJ2UC8y';
-        const supabase = Supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        
+        // Use lowercase 'supabase' to access the library global from CDN
+        const sbClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         const map = L.map('map').setView([38.5, -95], 5);
 
-        // Reliable OpenStreetMap tiles
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+            attribution: '&copy; OpenStreetMap contributors',
             maxZoom: 19
         }).addTo(map);
 
@@ -72,50 +71,42 @@
         let patronMarkers = [];
 
         const famousStops = [
-            {lat: 41.8781, lng: -87.6298, title: "Chicago Start", desc: "Official beginning at Grant Park / Adams & Michigan Ave"},
-            {lat: 38.6270, lng: -90.1994, title: "Gateway Arch", desc: "St. Louis, MO — Iconic symbol of the Westward Expansion"},
+            {lat: 41.8781, lng: -87.6298, title: "Chicago Start", desc: "Official beginning at Grant Park"},
+            {lat: 38.6270, lng: -90.1994, title: "Gateway Arch", desc: "St. Louis, MO — Iconic symbol"},
             {lat: 37.2089, lng: -93.2923, title: "Springfield, MO", desc: "Birthplace of Route 66"},
-            {lat: 36.1947, lng: -95.7475, title: "Blue Whale of Catoosa", desc: "Oklahoma — Classic roadside attraction"},
-            {lat: 35.2220, lng: -101.8313, title: "Cadillac Ranch", desc: "Amarillo, TX — Iconic art installation"},
-            {lat: 35.0844, lng: -106.6504, title: "Albuquerque, NM", desc: "Historic Old Town and neon signs"},
-            {lat: 35.1983, lng: -111.6513, title: "Flagstaff, AZ", desc: "Gateway to the Grand Canyon area"},
-            {lat: 34.5400, lng: -112.4685, title: "Seligman, AZ", desc: "Classic Route 66 town — Fun Run starting point"},
-            {lat: 34.0522, lng: -118.2437, title: "Santa Monica Pier", desc: "Official end of Route 66"}
+            {lat: 36.1947, lng: -95.7475, title: "Blue Whale of Catoosa", desc: "Oklahoma Roadside Classic"},
+            {lat: 35.2220, lng: -101.8313, title: "Cadillac Ranch", desc: "Amarillo, TX Art"},
+            {lat: 34.0522, lng: -118.2437, title: "Santa Monica Pier", desc: "Official end of the Mother Road"}
         ];
 
         const summerEvents = [
-            {lat: 37.2089, lng: -93.2923, date: "April 30–May 3, 2026", title: "National Route 66 Centennial Kickoff", desc: "Springfield, MO — Concerts, car shows, parades"},
-            {lat: 37.2089, lng: -93.2923, date: "June 4–6, 2026", title: "Rolla Route 66 Summerfest", desc: "Rolla, MO — Parade, music, family activities"},
-            {lat: 38.6270, lng: -90.1994, date: "May 1–4, 2026", title: "Route 66 Centennial Festival", desc: "St. Louis, MO — Music, classic cars, exhibits"},
-            {lat: 38.8114, lng: -89.9253, date: "June 13, 2026", title: "Edwardsville Route 66 Festival", desc: "Edwardsville, IL — Music, vintage cars, food"},
-            {lat: 36.1539, lng: -95.9928, date: "June 27–28, 2026", title: "AAA Route 66 Road Fest", desc: "Tulsa, OK — Major centennial event"},
-            {lat: 35.2220, lng: -101.8313, date: "June 4–13, 2026", title: "Texas Route 66 Festival", desc: "Amarillo area — 10 days of events"},
-            {lat: 34.0522, lng: -118.2437, date: "May 1–9, 2026", title: "Santa Monica International Jazz Festival", desc: "Santa Monica Pier — Centennial tribute"}
+            {lat: 37.2089, lng: -93.2923, date: "April 30–May 3, 2026", title: "National Centennial Kickoff", desc: "Springfield, MO — Music and Parades"},
+            {lat: 36.1539, lng: -95.9928, date: "June 27–28, 2026", title: "AAA Route 66 Road Fest", desc: "Tulsa, OK Major Event"}
         ];
 
         async function loadSharedPins() {
-            const { data, error } = await supabase.from('route66_pins').select('*').order('created_at', { ascending: false });
-            if (error) { console.error(error); return; }
+            const { data, error } = await sbClient.from('route66_pins').select('*').order('created_at', { ascending: false });
+            if (error) { console.error("Supabase Error:", error); return; }
 
             patronMarkers.forEach(m => map.removeLayer(m.marker));
             patronMarkers = [];
 
             data.forEach(pin => {
-                const popup = `<div class="popup-content"><strong>${pin.title}</strong><br><br><strong>Comment:</strong><br>${pin.comment || 'No comment.'}<br><br><small>Added: ${new Date(pin.created_at).toLocaleDateString()}</small></div>`;
-                const marker = L.marker([pin.lat, pin.lng], {icon: L.divIcon({html: '🟢', iconSize: [28,28]})}).addTo(map).bindPopup(popup);
+                const popup = `<div class="popup-content"><strong>${pin.title}</strong><br>${pin.comment || ''}<br><br><small>Added: ${new Date(pin.created_at).toLocaleDateString()}</small></div>`;
+                const marker = L.marker([pin.lat, pin.lng], {icon: L.divIcon({className: 'custom-div-icon', html: '🟢', iconSize: [25,25]})}).addTo(map).bindPopup(popup);
                 patronMarkers.push({marker});
             });
         }
 
         async function addPatronPin(lat, lng) {
-            const title = prompt("Pin Title (e.g. 'Great diner here!')") || "Patron Suggestion";
-            const comment = prompt("Your suggestion or comment:") || "";
+            const title = prompt("Place Name (e.g. 'Cozy Diner')");
+            if (!title) return;
+            const comment = prompt("Why should we stop here?");
 
-            const { error } = await supabase.from('route66_pins').insert([{ lat, lng, title, comment }]);
+            const { error } = await sbClient.from('route66_pins').insert([{ lat, lng, title, comment }]);
             if (error) {
-                alert("Error saving pin: " + error.message);
+                alert("Error: Check your Supabase RLS policies!");
             } else {
-                alert("✅ Pin added! It will appear for everyone shortly.");
                 loadSharedPins();
             }
         }
@@ -125,50 +116,48 @@
             const total = fullRouteCoords.length;
             const progPoints = Math.max(2, Math.ceil(total * (currentProgress / 100)));
             progressLine = L.polyline(fullRouteCoords.slice(0, progPoints), {
-                color: '#c8102e', weight: 12, opacity: 0.95, lineJoin: 'round'
+                color: '#c8102e', weight: 8, opacity: 0.8
             }).addTo(map);
             document.getElementById('progress-text').textContent = `${currentProgress}% Complete — Chicago to Santa Monica`;
         }
 
         function toggleAdmin() {
-            const pass = prompt("Enter admin password:");
+            const pass = prompt("Admin Password:");
             if (pass === "route66owner2026") {
-                const newProg = prompt("Update progress % (0-100):", currentProgress);
+                const newProg = prompt("Update progress (0-100):", currentProgress);
                 if (newProg !== null) {
                     currentProgress = Math.max(0, Math.min(100, parseFloat(newProg) || 0));
                     localStorage.setItem('route66Progress', currentProgress);
                     updateProgressLine();
-                    alert(`Progress updated to ${currentProgress}%`);
                 }
-            } else if (pass) {
-                alert("Incorrect password.");
             }
         }
 
         function shareMap() {
-            navigator.clipboard.writeText(window.location.href).then(() => alert("✅ Link copied!"));
+            navigator.clipboard.writeText(window.location.href).then(() => alert("Link copied!"));
         }
 
-        // Load fixed markers
+        // Render fixed items
         famousStops.forEach(s => {
-            L.marker([s.lat, s.lng], {icon: L.divIcon({html:'🟠', iconSize:[32,32]})}).addTo(map)
-              .bindPopup(`<div class="popup-content"><strong>${s.title}</strong><br>${s.desc}</div>`);
+            L.marker([s.lat, s.lng], {icon: L.divIcon({className: 'stop-icon', html:'🟠', iconSize:[30,30]})}).addTo(map)
+              .bindPopup(`<strong>${s.title}</strong><br>${s.desc}`);
         });
 
         summerEvents.forEach(e => {
-            L.marker([e.lat, e.lng], {icon: L.divIcon({html:'⭐', iconSize:[32,32]})}).addTo(map)
-              .bindPopup(`<div class="popup-content"><strong>${e.title}</strong><br><small>${e.date}</small><br>${e.desc}</div>`);
+            L.marker([e.lat, e.lng], {icon: L.divIcon({className: 'event-icon', html:'⭐', iconSize:[30,30]})}).addTo(map)
+              .bindPopup(`<strong>${e.title}</strong><br>${e.date}<br>${e.desc}`);
         });
 
         map.on('click', e => addPatronPin(e.latlng.lat, e.latlng.lng));
 
-        // Initialize
+        // Initial setup
         const saved = localStorage.getItem('route66Progress');
         if (saved) currentProgress = parseFloat(saved);
         updateProgressLine();
         loadSharedPins();
 
-        console.log("%cRoute 66 map fixed - Supabase syntax error resolved", "color:#c8102e;font-size:14px;");
+        // Fix for rendering bugs on mobile/Netlify
+        setTimeout(() => map.invalidateSize(), 500);
     </script>
 </body>
 </html>
