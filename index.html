@@ -17,7 +17,8 @@
         button:hover { background: #a00; }
         .legend { position: absolute; bottom: 25px; right: 25px; background: white; padding: 12px; border-radius: 8px; box-shadow: 0 3px 8px rgba(0,0,0,0.25); z-index: 1000; font-size: 0.9em; pointer-events: none; }
         .popup-content { min-width: 260px; line-height: 1.4; }
-        .del-btn { background: #333; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; margin-top: 10px; width: 100%; }
+        .del-btn { background: #333; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; margin-top: 10px; width: 100%; font-weight: bold; }
+        .del-btn:hover { background: #000; }
         .admin-btn { background: #333; font-size: 0.9em; }
     </style>
 </head>
@@ -30,7 +31,7 @@
     </div>
 
     <div id="controls">
-        <button onclick="toggleAdmin()" class="admin-btn">🔑 Admin Mode</button>
+        <button onclick="toggleAdmin()" class="admin-btn">🔑 Admin Mode (Progress Line)</button>
         <button onclick="shareMap()">Copy Map Link</button>
     </div>
 
@@ -47,7 +48,7 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        // === SUPABASE CONFIG ===
+        // === CONFIGURATION ===
         const SUPABASE_URL = 'https://duggytpkrcqvebdwrphr.supabase.co';
         const SUPABASE_ANON_KEY = 'sb_publishable_qRT_1b4lB4-sfrdUi2YtDw_zuJ2UC8y';
         const ADMIN_PASS = "route66owner2026";
@@ -73,21 +74,18 @@
             {lat: 35.0392, lng: -102.6635, type:'landmark', title: "Midpoint Café", desc: "Adrian, TX - 1,139 miles to each end."},
             {lat: 34.9099, lng: -109.8067, type:'park', title: "Petrified Forest NP", desc: "Arizona - Only NP the road cuts through."},
             {lat: 34.0086, lng: -118.4986, type:'landmark', title: "End of Trail Pier", desc: "Santa Monica, CA - The finish line."},
-            // Summer 2026 Festivals
             {lat: 39.7817, lng: -89.6501, type:'event', title: "IL State Fair 66 Experience", desc: "Aug 13-23, 2026: Massive neon & history expo."},
             {lat: 38.8114, lng: -89.9253, type:'event', title: "Edwardsville 66 Fest", desc: "June 13, 2026: Classic car show & music."},
-            {lat: 38.6011, lng: -90.3547, type:'event', title: "Cars & Guitars Fest", desc: "June 7, 2026: Kirkwood, MO celebration."},
             {lat: 37.9509, lng: -91.7724, type:'event', title: "Route 66 Summerfest", desc: "June 4-6, 2026: Rolla, MO kickoff event."},
             {lat: 36.1539, lng: -95.9928, type:'event', title: "AAA Route 66 Road Fest", desc: "June 27-28, 2026: Major Tulsa festival."},
-            {lat: 35.4676, lng: -97.5164, type:'event', title: "Kickin' It on 66 Birthday", desc: "May 30, 2026: OKC Scissortail Park party."},
             {lat: 35.2220, lng: -101.8313, type:'event', title: "Texas Route 66 Festival", desc: "June 4-13, 2026: Cattle drives & Grand Finale."},
-            {lat: 35.0844, lng: -106.6504, type:'event', title: "ABQ Route 66 Summerfest", desc: "July 18, 2026: 1 mile of music & food in Nob Hill."},
-            {lat: 35.5281, lng: -108.7426, type:'event', title: "Gallup Route 66 Rides", desc: "July 24-26, 2026: Tunnel of fire & 66 hot air balloons."},
+            {lat: 35.0844, lng: -106.6504, type:'event', title: "ABQ Route 66 Summerfest", desc: "July 18, 2026: Nob Hill music & food."},
+            {lat: 35.5281, lng: -108.7426, type:'event', title: "Gallup Route 66 Rides", desc: "July 24-26, 2026: 66 hot air balloons."},
             {lat: 37.2089, lng: -93.2923, type:'event', title: "Birthplace of 66 Festival", desc: "Aug 7-8, 2026: Springfield's premier car show."}
         ];
 
         let progressLine = null;
-        let currentProgress = 35;
+        let currentProgress = 0;
         let patronMarkers = [];
 
         // --- LOGIC ---
@@ -110,14 +108,20 @@
             patronMarkers.forEach(m => map.removeLayer(m.marker));
             patronMarkers = [];
             data.forEach(pin => {
-                const popup = `<div class="popup-content"><strong>${pin.title}</strong><br>${pin.comment}<br><br><small>Added: ${new Date(pin.created_at).toLocaleDateString()}</small><button class="del-btn" onclick="deletePin('${pin.id}')">🗑️ Delete</button></div>`;
+                const popup = `
+                    <div class="popup-content">
+                        <strong>${pin.title}</strong><br>
+                        ${pin.comment}<br><br>
+                        <small>Added: ${new Date(pin.created_at).toLocaleDateString()}</small>
+                        <button class="del-btn" onclick="deletePin('${pin.id}')">🗑️ Delete This Pin</button>
+                    </div>`;
                 const marker = L.marker([pin.lat, pin.lng], {icon: L.divIcon({html: '🟢', iconSize: [25,25]})}).addTo(map).bindPopup(popup);
                 patronMarkers.push({marker});
             });
         }
 
         async function addPatronPin(lat, lng) {
-            const title = prompt("Pin Name?");
+            const title = prompt("Pin Name? (e.g. Best Burgers)");
             if (!title) return;
             const comment = prompt("Why this spot?");
             await sbClient.from('route66_pins').insert([{ lat, lng, title, comment }]);
@@ -125,9 +129,13 @@
         }
 
         async function deletePin(id) {
-            if (prompt("Admin Password:") === ADMIN_PASS) {
-                await sbClient.from('route66_pins').delete().eq('id', id);
-                loadSharedPins();
+            if (confirm("Are you sure you want to remove this suggestion? Anyone can delete pins to keep the map clean.")) {
+                const { error } = await sbClient.from('route66_pins').delete().eq('id', id);
+                if (error) {
+                    alert("Delete failed. Check your Supabase RLS settings.");
+                } else {
+                    loadSharedPins();
+                }
             }
         }
 
@@ -141,12 +149,12 @@
 
         function toggleAdmin() {
             if (prompt("Admin Password:") === ADMIN_PASS) {
-                const newP = prompt("New Progress %?", currentProgress);
+                const newP = prompt("New Progress % (0-100)?", currentProgress);
                 if (newP !== null) { currentProgress = parseFloat(newP); updateProgressLine(); }
             }
         }
 
-        function shareMap() { navigator.clipboard.writeText(window.location.href).then(() => alert("Copied!")); }
+        function shareMap() { navigator.clipboard.writeText(window.location.href).then(() => alert("Map link copied to clipboard!")); }
 
         map.on('click', e => addPatronPin(e.latlng.lat, e.latlng.lng));
         updateProgressLine();
