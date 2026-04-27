@@ -47,14 +47,14 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        // === SUPABASE CONFIG (Corrected) ===
+        // === FIXED SUPABASE CONFIG ===
         const SUPABASE_URL = 'https://duggytpkrcqvebdwrphr.supabase.co';
         const SUPABASE_ANON_KEY = 'sb_publishable_qRT_1b4lB4-sfrdUi2YtDw_zuJ2UC8y';
-        const supabase = Supabase.createClient(https://duggytpkrcqvebdwrphr.supabase.co, sb_publishable_qRT_1b4lB4-sfrdUi2YtDw_zuJ2UC8y);
+        const supabase = Supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         const map = L.map('map').setView([38.5, -95], 5);
 
-        // Reliable OpenStreetMap tiles (until Stadia is confirmed working)
+        // Reliable OpenStreetMap tiles
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
             maxZoom: 19
@@ -154,6 +154,7 @@
             L.marker([s.lat, s.lng], {icon: L.divIcon({html:'🟠', iconSize:[32,32]})}).addTo(map)
               .bindPopup(`<div class="popup-content"><strong>${s.title}</strong><br>${s.desc}</div>`);
         });
+
         summerEvents.forEach(e => {
             L.marker([e.lat, e.lng], {icon: L.divIcon({html:'⭐', iconSize:[32,32]})}).addTo(map)
               .bindPopup(`<div class="popup-content"><strong>${e.title}</strong><br><small>${e.date}</small><br>${e.desc}</div>`);
@@ -167,7 +168,7 @@
         updateProgressLine();
         loadSharedPins();
 
-        console.log("%cRoute 66 map with Supabase fixed — syntax error resolved", "color:#c8102e;font-size:14px;");
+        console.log("%cRoute 66 map fixed - Supabase syntax error resolved", "color:#c8102e;font-size:14px;");
     </script>
 </body>
 </html>
